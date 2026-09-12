@@ -1,0 +1,7 @@
+[project]
+name = "rate-limiter-algorithms"
+version = "0.1.0"
+description = "Rate limiting algorithms implemented from scratch, with terminal demos"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
