@@ -1,7 +1,7 @@
 # Rate limiter algorithms
 
-Small, readable implementations of the common rate limiting algorithms, one per folder,
-each with a terminal demo that shows how it behaves and where it breaks.
+Small, readable implementations of the common rate limiting algorithms, one per folder.
+Each one comes with a terminal demo that shows how it behaves and where it breaks.
 
 ## Algorithms
 
@@ -14,10 +14,14 @@ each with a terminal demo that shows how it behaves and where it breaks.
 ## Fixed window counter
 
 Time is cut into fixed windows of `window_size` seconds, aligned to the Unix epoch. The
-window number for a request is `int(time.time()) // window_size`. Each user, api, and window
-gets its own counter under the key `ratelimit:{api}:{user_id}:{window}`. A request is allowed
-while that counter is below `limit`. When the window number changes, the key changes too, so
-every counter starts again from zero.
+window number for a request is `int(time.time()) // window_size`. Each user gets one record
+under the key `ratelimit:{api}:{user_id}`, holding a count and the window number that count
+belongs to. A request is allowed while the count is below `limit`.
+
+A window never has to be closed. On the first request of a new window, the stored window
+number no longer matches the current one. The record is then overwritten with a count of
+one. Each user therefore holds exactly one record, whatever the uptime, and there is
+nothing to expire or sweep.
 
 The weakness is the boundary burst. A client can send `limit` requests at the end of one
 window and `limit` more at the start of the next. Both windows are inside their limit, but
@@ -47,6 +51,11 @@ The check passes with no output. It fails with an `AssertionError`.
 
 ## Note on state
 
-The limiter keeps its counters in a plain dict inside the process. Each worker therefore
-counts on its own, and a restart forgets everything. For real traffic across more than one
-process, hold the counters in Redis and let `EXPIRE` remove the old windows.
+The limiter keeps its records in a plain dict inside the process. Each worker therefore
+counts on its own, and a restart forgets everything. The dict grows with the number of
+users and never with uptime.
+
+For real traffic across more than one process, move the records to Redis. Reading the
+record, resetting it, and incrementing it have to happen as one step, so use a Lua script
+or a `MULTI` block. Otherwise two workers read the same count, and both allow a request that
+the limit forbids.

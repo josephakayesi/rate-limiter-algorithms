@@ -23,7 +23,7 @@ def run_burst_demo():
         ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
         allowed = limiter.is_allowed(user_id=user_id, api=api)
         window = int(time.time()) // window_size
-        count = limiter.cache.get(f'ratelimit:{api}:{user_id}:{window}', 0)
+        count = limiter.count_for(user_id=user_id, api=api)
         bar = '█' * count + '░' * (limit - count)
         status = 'ALLOW' if allowed else 'DENY '
         print(f'{ts}  [{status}]  [{bar}]  {count}/{limit}  window={window}')
@@ -40,7 +40,7 @@ def run_burst_demo():
         ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
         allowed = limiter.is_allowed(user_id=user_id, api=api)
         window = int(time.time()) // window_size
-        count = limiter.cache.get(f'ratelimit:{api}:{user_id}:{window}', 0)
+        count = limiter.count_for(user_id=user_id, api=api)
         bar = '█' * count + '░' * (limit - count)
         status = 'ALLOW' if allowed else 'DENY '
         print(f'{ts}  [{status}]  [{bar}]  {count}/{limit}  window={window}')
@@ -61,8 +61,7 @@ def run_fwc():
     # for _ in range(20):
         ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
         allowed = limiter.is_allowed(user_id=user_id, api=api)
-        window = int(time.time()) // limiter.window_size
-        count = limiter.cache.get(f'ratelimit:{api}:{user_id}:{window}', 0)
+        count = limiter.count_for(user_id=user_id, api=api)
 
         bar = '█' * count + '░' * (limiter.limit - count)
         status = 'ALLOW' if allowed else 'DENY '
