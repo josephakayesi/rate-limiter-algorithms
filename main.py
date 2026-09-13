@@ -1,5 +1,6 @@
+import random
 import time
-from datetime import datetime, timezone 
+from datetime import datetime, timezone
 from algorithms import FixedWindowCounterRateLimiter, SlidingWindowLogRateLimiter
 
 def run_burst_demo():
@@ -82,8 +83,11 @@ def run_swl():
 
         bar = '█' * count + '░' * (limiter.limit - count)
         status = 'ALLOW' if allowed else 'DENY '
-        print(f'{ts}  [{status}]  [{bar}]  {count}/{limiter.limit}')
-        time.sleep(1)
+        # Uneven gaps, so the log ages out one timestamp at a time instead of
+        # in lockstep with the requests.
+        gap = random.uniform(1, 5)
+        print(f'{ts}  [{status}]  [{bar}]  {count}/{limiter.limit}  next in {gap:.1f}s')
+        time.sleep(gap)
 
 def main():
     # Fixed window
