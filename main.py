@@ -1,6 +1,6 @@
 import time
 from datetime import datetime, timezone 
-from algorithms import FixedWindowCounterRateLimiter
+from algorithms import FixedWindowCounterRateLimiter, SlidingWindowLogRateLimiter
 
 def run_burst_demo():
     window_size = 10
@@ -68,9 +68,30 @@ def run_fwc():
         print(f'{ts}  [{status}]  [{bar}]  {count}/{limiter.limit}')
         time.sleep(1)
 
+def run_swl():
+    limiter = SlidingWindowLogRateLimiter(window_size=10, limit=5)
+
+    user_id = 'zara'
+    api = '/api/login'
+
+
+    while True:
+        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        allowed = limiter.is_allowed(user_id=user_id, api=api)
+        count = limiter.count_for(user_id=user_id, api=api)
+
+        bar = '█' * count + '░' * (limiter.limit - count)
+        status = 'ALLOW' if allowed else 'DENY '
+        print(f'{ts}  [{status}]  [{bar}]  {count}/{limiter.limit}')
+        time.sleep(1)
+
 def main():
+    # Fixed window
     # run_fwc()
-    run_burst_demo()
+    # run_burst_demo()
+
+    # Sliding window log
+    run_swl()
 
 
 
