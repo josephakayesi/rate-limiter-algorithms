@@ -52,8 +52,8 @@ the process ends.
 uv run main.py <demo>
 ```
 
-The demos are `fwc`, `swl` and `swc`, plus `fwc-burst` and `swc-burst`. Run `uv run
-main.py -h` for the list.
+The demos are `fwc`, `swl` and `swc`, plus `fwc-burst`, `swc-burst` and `swc-drift`. Run
+`uv run main.py -h` for the list.
 
 `fwc`, `swl` and `swc` are continuous views. Each sends requests until you stop it and
 prints a bar of the current count. The fixed window bar empties all at once. The sliding
@@ -63,6 +63,27 @@ window bars refill a piece at a time.
 second before a window boundary, fires a full allowance, crosses the boundary, then fires
 a full allowance again. The fixed window counter allows all 10 requests inside about a
 second, which is the boundary burst. The sliding window counter denies the second batch.
+
+`swc-drift` sends one stream to the sliding window counter and the sliding window log at
+once. It marks every request the two decide differently. The log is the exact
+answer, because it counts the requests that are really inside the last `window_size`
+seconds. The counter only estimates that number, because it spreads the previous
+window's count evenly across that window.
+
+The stream is an ordinary one. It sends a request every 1.5 seconds, which offers about
+6.7 requests per window against a limit of 5. Both limiters therefore deny often enough
+for the drift to show. There is no burst and no lining up with a boundary. Over a 45
+second run, about a third of the requests land on a different verdict. The two running
+totals end a request or two apart.
+
+An even stream still drifts, because the requests the counter keeps are not the ones you
+send. Each limiter allows a run of requests and then denies for a while. The allowed
+requests inside a window therefore sit in a clump, not evenly across it. The estimate
+assumes the even spread, so it reads that clump as too many requests or too few. Which
+way it goes depends on the half of the window the clump sits in.
+
+The error is bounded by the previous window's count. It also shrinks as the current
+window fills, because the previous count carries less weight as `elapsed` grows.
 
 To add a demo, add one entry to the `DEMOS` dict in `main.py`. A limiter needs
 `is_allowed`, `count_for` and a `limit` attribute, and `burst` needs `window_size` too.

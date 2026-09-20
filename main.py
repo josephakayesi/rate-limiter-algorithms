@@ -75,12 +75,52 @@ def burst(limiter: WindowedLimiter) -> None:
     for _ in range(limit):
         show(limiter, limiter.is_allowed(USER, API))
 
+def drift(window_size: int = 10, limit: int = 5, gap: float = 1.5) -> None:
+    """Send one steady stream to the counter and the log, and mark where they disagree.
+
+    The log is the exact answer, because it counts the requests that really fall inside
+    the last `window_size` seconds. The counter only estimates that number, because it
+    spreads the previous window's count evenly across that window. No stream is that
+    even, not even this one, so the two verdicts drift apart by a request either way.
+
+    `gap` is the pause between requests. The default offers more than `limit` per
+    window, so both limiters deny often enough for the drift to show.
+    """
+    counter = SlidingWindowCounterRateLimiter(window_size, limit)
+    log = SlidingWindowLogRateLimiter(window_size, limit)
+
+    def side(limiter: Limiter, allowed: bool) -> str:
+        status = 'ALLOW' if allowed else 'DENY '
+        return f'[{status}] {limiter.count_for(USER, API)}/{limiter.limit}'
+
+    sent = counter_total = log_total = 0
+    print(f'Window: {window_size}s, limit: {limit}, one request every {gap}s\n')
+
+    try:
+        while True:
+            counter_allowed = counter.is_allowed(USER, API)
+            log_allowed = log.is_allowed(USER, API)
+            sent += 1
+            counter_total += int(counter_allowed)
+            log_total += int(log_allowed)
+
+            ts = datetime.now(UTC).strftime('%H:%M:%S')
+            note = '  <-- disagree' if counter_allowed != log_allowed else ''
+            print(
+                f'{ts}  counter {side(counter, counter_allowed)}'
+                f'  log {side(log, log_allowed)}{note}'
+            )
+            time.sleep(gap)
+    finally:
+        print(f'\n{sent} sent: counter allowed {counter_total}, log allowed {log_total}')
+
 DEMOS = {
     'fwc': lambda: stream(FixedWindowCounterRateLimiter(10, 5), gap=1),
     'swl': lambda: stream(SlidingWindowLogRateLimiter(10, 5)),
     'swc': lambda: stream(SlidingWindowCounterRateLimiter(10, 5)),
     'fwc-burst': lambda: burst(FixedWindowCounterRateLimiter(10, 5)),
     'swc-burst': lambda: burst(SlidingWindowCounterRateLimiter(10, 5)),
+    'swc-drift': drift,
 }
 
 def main() -> None:
