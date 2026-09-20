@@ -13,9 +13,7 @@ class SlidingWindowCounterRateLimiter:
         # One log per user: a deque of epoch seconds, oldest first. Rejected
         # requests are never logged, so the log holds allowed requests only.
         # Entries are never removed. See the note at the top of the file.
-        self.cache: dict[
-            str, dict[str, int]
-        ] = {}  # { window: int, count: int, prev_count: int }
+        self.cache: dict[str, dict[str, int]] = {}  # { window: int, count: int, prev_count: int }
 
     def is_allowed(self, user_id: str, api: str) -> bool:
         key = f"ratelimit:{api}:{user_id}"
