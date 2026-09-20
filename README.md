@@ -7,7 +7,7 @@ Each one comes with a terminal demo that shows how it behaves and where it break
 
 - [x] Fixed window counter
 - [x] Sliding window log
-- [ ] Sliding window counter
+- [x] Sliding window counter
 - [ ] Token bucket
 - [ ] Leaky bucket
 
@@ -68,6 +68,7 @@ window bar refills one slot at a time.
 ```
 uv run test_fixed_window_counter.py
 uv run test_sliding_window_log.py
+uv run test_sliding_window_counter.py
 ```
 
 A check passes with no output. It fails with an `AssertionError`. The sliding window log
@@ -75,7 +76,7 @@ check sleeps through several windows, so it takes a few seconds.
 
 ## Note on state
 
-Both limiters keep their state in a plain dict inside the process. Each worker therefore
+Every limiter here keeps its state in a plain dict inside the process. Each worker therefore
 counts on its own, and a restart forgets everything.
 
 For real traffic across more than one process, move the state to Redis. Read and write have
