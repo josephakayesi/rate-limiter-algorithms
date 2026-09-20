@@ -17,11 +17,11 @@ class FixedWindowCounterRateLimiter:
 	    limit: requests allowed per user, per api, per window.
 	"""
 	def __init__(self, window_size: int, limit: int):
-		self.window_size = window_size
-		self.limit = limit
+		self.window_size: int = window_size
+		self.limit: int = limit
 		# One record per user: {'count': int, 'window': int}. A new window
 		# overwrites the record, so no old windows are left to clean up.
-		self.cache = {}
+		self.cache: dict[str, dict[str, int]] = {}
 
 	def is_allowed(self, user_id: str, api: str) -> bool:
 		window = int(time.time()) // self.window_size

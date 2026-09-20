@@ -49,19 +49,23 @@ the process ends.
 ## Run the demos
 
 ```
-uv run main.py
+uv run main.py <demo>
 ```
 
-`main()` calls one runner at a time, and the others sit commented out. Uncomment the one
-you want.
+The demos are `fwc`, `swl` and `swc`, plus `fwc-burst` and `swc-burst`. Run `uv run
+main.py -h` for the list.
 
-`run_burst_demo()` waits until 6 seconds into the current window, fires 5 requests, crosses
-the boundary, then fires 5 more. All 10 are allowed, inside about 10 seconds, which is the
-boundary burst.
-
-`run_fwc()` and `run_swl()` are continuous views. Each sends one request per second and
+`fwc`, `swl` and `swc` are continuous views. Each sends requests until you stop it and
 prints a bar of the current count. The fixed window bar empties all at once. The sliding
-window bar refills one slot at a time.
+window bars refill a piece at a time.
+
+`fwc-burst` and `swc-burst` are the same script against two limiters. Each lines up 1
+second before a window boundary, fires a full allowance, crosses the boundary, then fires
+a full allowance again. The fixed window counter allows all 10 requests inside about a
+second, which is the boundary burst. The sliding window counter denies the second batch.
+
+To add a demo, add one entry to the `DEMOS` dict in `main.py`. A limiter needs
+`is_allowed`, `count_for` and a `limit` attribute, and `burst` needs `window_size` too.
 
 ## Run the checks
 

@@ -1,103 +1,95 @@
+"""Terminal demos for the rate limiters. Run: uv run main.py <demo>
+
+`Limiter` and `WindowedLimiter` below are the whole contract a limiter needs to be
+demo-ready. A bucket algorithm, which has no windows, satisfies `Limiter` alone and so
+gets a `stream` entry and no `burst` one.
+"""
+import argparse
 import random
 import time
-from datetime import datetime, timezone
-from algorithms import FixedWindowCounterRateLimiter, SlidingWindowLogRateLimiter
+from datetime import UTC, datetime
+from typing import Protocol, cast
 
-def run_burst_demo():
-    window_size = 10
-    limit = 5
-    limiter = FixedWindowCounterRateLimiter(window_size=window_size, limit=limit)
-    user_id = 'zara'
-    api = '/api/login'
+from algorithms import (
+    FixedWindowCounterRateLimiter,
+    SlidingWindowCounterRateLimiter,
+    SlidingWindowLogRateLimiter,
+)
 
-    print(f"Window: {window_size}s, Limit: {limit}\n")
+USER = 'zara'
+API = '/api/login'
 
-    # Wait until 6s into the current window (4s left before boundary)
-    now = time.time()
-    offset = now % window_size
-    sleep_to_target = (6 - offset) % window_size
-    print(f"Waiting {sleep_to_target:.1f}s until 6s into window...\n")
-    time.sleep(sleep_to_target)
+class Limiter(Protocol):
+    limit: int
 
-    print("--- Firing 5 requests (window N) ---\n")
-    for i in range(limit):
-        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
-        allowed = limiter.is_allowed(user_id=user_id, api=api)
-        window = int(time.time()) // window_size
-        count = limiter.count_for(user_id=user_id, api=api)
-        bar = '█' * count + '░' * (limit - count)
-        status = 'ALLOW' if allowed else 'DENY '
-        print(f'{ts}  [{status}]  [{bar}]  {count}/{limit}  window={window}')
-        time.sleep(1)
+    def is_allowed(self, user_id: str, api: str) -> bool: ...
+    def count_for(self, user_id: str, api: str) -> int: ...
 
-    # Wait for boundary to cross
-    time.sleep(1)
-    print(f"\n{'─' * 50}")
-    print(f"  Window boundary crossed")
-    print(f"{'─' * 50}\n")
+class WindowedLimiter(Limiter, Protocol):
+    window_size: int
 
-    print("--- Firing 5 more requests (window N+1) ---\n")
-    for i in range(limit):
-        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
-        allowed = limiter.is_allowed(user_id=user_id, api=api)
-        window = int(time.time()) // window_size
-        count = limiter.count_for(user_id=user_id, api=api)
-        bar = '█' * count + '░' * (limit - count)
-        status = 'ALLOW' if allowed else 'DENY '
-        print(f'{ts}  [{status}]  [{bar}]  {count}/{limit}  window={window}')
-        time.sleep(1)
+def show(limiter: Limiter, allowed: bool, note: str = '') -> None:
+    """Print one decision: the time, the verdict, a bar of the current count."""
+    count = limiter.count_for(USER, API)
+    # The sliding window counter can estimate above the limit, so clamp the bar.
+    filled = min(count, limiter.limit)
+    bar = '█' * filled + '░' * (limiter.limit - filled)
+    ts = datetime.now(UTC).strftime('%H:%M:%S')
+    status = 'ALLOW' if allowed else 'DENY '
+    print(f'{ts}  [{status}]  [{bar}]  {count}/{limiter.limit}  {note}'.rstrip())
 
-    print(f"\nTotal: {limit * 2} requests allowed, all 'legal' per window")
-    print(f"But concentrated in ~{window_size}s around the boundary")
+def stream(limiter: Limiter, gap: float | None = None) -> None:
+    """Send requests until you stop it, printing the count after each one.
 
-
-def run_fwc():
-    limiter = FixedWindowCounterRateLimiter(window_size=10, limit=5)
-
-    user_id = 'zara'
-    api = '/api/login'
-
-
+    `gap` is the pause between requests, in seconds. None spaces them unevenly, so
+    the window ages out between requests instead of in lockstep with them.
+    """
     while True:
-    # for _ in range(20):
-        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
-        allowed = limiter.is_allowed(user_id=user_id, api=api)
-        count = limiter.count_for(user_id=user_id, api=api)
+        allowed = limiter.is_allowed(USER, API)
+        pause = random.uniform(1, 5) if gap is None else gap
+        show(limiter, allowed, f'next in {pause:.1f}s')
+        time.sleep(pause)
 
-        bar = '█' * count + '░' * (limiter.limit - count)
-        status = 'ALLOW' if allowed else 'DENY '
-        print(f'{ts}  [{status}]  [{bar}]  {count}/{limiter.limit}')
-        time.sleep(1)
+def burst(limiter: WindowedLimiter) -> None:
+    """Fire a full allowance just before a window boundary, then again just after.
 
-def run_swl():
-    limiter = SlidingWindowLogRateLimiter(window_size=10, limit=5)
+    The fixed window counter allows both batches, so 2 * limit requests land inside
+    about a second. The sliding window counter carries the first batch into the new
+    window and denies the second.
+    """
+    size, limit = limiter.window_size, limiter.limit
+    print(f'Window: {size}s, limit: {limit}\n')
 
-    user_id = 'zara'
-    api = '/api/login'
+    # Line up 1 second before the next boundary, with the whole batch to follow
+    # back to back, so every request of it lands inside the same window.
+    time.sleep((size - 1 - time.time() % size) % size)
 
+    print(f'--- {limit} requests, 1s before the boundary ---\n')
+    for _ in range(limit):
+        show(limiter, limiter.is_allowed(USER, API))
 
-    while True:
-        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
-        allowed = limiter.is_allowed(user_id=user_id, api=api)
-        count = limiter.count_for(user_id=user_id, api=api)
+    time.sleep(1.1)
+    print(f'\n{"─" * 46}\n  boundary crossed\n{"─" * 46}\n')
 
-        bar = '█' * count + '░' * (limiter.limit - count)
-        status = 'ALLOW' if allowed else 'DENY '
-        # Uneven gaps, so the log ages out one timestamp at a time instead of
-        # in lockstep with the requests.
-        gap = random.uniform(1, 5)
-        print(f'{ts}  [{status}]  [{bar}]  {count}/{limiter.limit}  next in {gap:.1f}s')
-        time.sleep(gap)
+    print(f'--- {limit} more requests, just after ---\n')
+    for _ in range(limit):
+        show(limiter, limiter.is_allowed(USER, API))
 
-def main():
-    # Fixed window
-    # run_fwc()
-    # run_burst_demo()
+DEMOS = {
+    'fwc': lambda: stream(FixedWindowCounterRateLimiter(10, 5), gap=1),
+    'swl': lambda: stream(SlidingWindowLogRateLimiter(10, 5)),
+    'swc': lambda: stream(SlidingWindowCounterRateLimiter(10, 5)),
+    'fwc-burst': lambda: burst(FixedWindowCounterRateLimiter(10, 5)),
+    'swc-burst': lambda: burst(SlidingWindowCounterRateLimiter(10, 5)),
+}
 
-    # Sliding window log
-    run_swl()
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Rate limiter demos.')
+    _ = parser.add_argument('demo', choices=DEMOS, help='which demo to run')
+    try:
+        DEMOS[cast(str, parser.parse_args().demo)]()
+    except KeyboardInterrupt:
+        print()
 
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

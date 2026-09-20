@@ -26,12 +26,12 @@ class SlidingWindowLogRateLimiter:
 	    limit: requests allowed per user, per api, within that window.
 	"""
 	def __init__(self, window_size: int, limit: int):
-		self.window_size = window_size
-		self.limit = limit
+		self.window_size: int = window_size
+		self.limit: int = limit
 		# One log per user: a deque of epoch seconds, oldest first. Rejected
 		# requests are never logged, so the log holds allowed requests only.
 		# Entries are never removed. See the note at the top of the file.
-		self.cache = defaultdict(deque)
+		self.cache: defaultdict[str, deque[int]] = defaultdict(deque)
 
 	def is_allowed(self, user_id: str, api: str) -> bool:
 		key = f'ratelimit:{api}:{user_id}'
@@ -42,7 +42,7 @@ class SlidingWindowLogRateLimiter:
 		# order, so the expired ones are always at the front and the loop stops
 		# at the first timestamp that is still inside.
 		while log and now - log[0] >= self.window_size:
-			log.popleft()
+			_ = log.popleft()
 
 		if len(log) < self.limit:
 			log.append(now)
