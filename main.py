@@ -1,8 +1,8 @@
 """Terminal demos for the rate limiters. Run: uv run main.py <demo>
 
 `Limiter` and `WindowedLimiter` below are the whole contract a limiter needs to be
-demo-ready. A bucket algorithm, which has no windows, satisfies `Limiter` alone and so
-gets a `stream` entry and no `burst` one.
+demo-ready. The token bucket has no windows, so it satisfies `Limiter` alone and gets a
+`stream` entry and no `burst` one.
 """
 import argparse
 import random
@@ -14,6 +14,7 @@ from algorithms import (
     FixedWindowCounterRateLimiter,
     SlidingWindowCounterRateLimiter,
     SlidingWindowLogRateLimiter,
+    TokenBucketRateLimiter,
 )
 
 USER = 'zara'
@@ -118,6 +119,7 @@ DEMOS = {
     'fwc': lambda: stream(FixedWindowCounterRateLimiter(10, 5), gap=1),
     'swl': lambda: stream(SlidingWindowLogRateLimiter(10, 5)),
     'swc': lambda: stream(SlidingWindowCounterRateLimiter(10, 5)),
+    'tb': lambda: stream(TokenBucketRateLimiter(5, 0.5), gap=1),
     'fwc-burst': lambda: burst(FixedWindowCounterRateLimiter(10, 5)),
     'swc-burst': lambda: burst(SlidingWindowCounterRateLimiter(10, 5)),
     'swc-drift': drift,

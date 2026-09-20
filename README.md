@@ -8,7 +8,7 @@ Each one comes with a terminal demo that shows how it behaves and where it break
 - [x] Fixed window counter
 - [x] Sliding window log
 - [x] Sliding window counter
-- [ ] Token bucket
+- [x] Token bucket
 - [ ] Leaky bucket
 
 ## Fixed window counter
@@ -46,18 +46,51 @@ limit therefore costs `limit` timestamps, where the fixed window counter costs o
 integer. The limiter also evicts nobody, so a user who goes quiet keeps their log until
 the process ends.
 
+## Token bucket
+
+Each user gets a bucket of `capacity` tokens under the key `ratelimit:{api}:{user_id}`. A
+request spends one token, and a request that finds an empty bucket is denied. Tokens drip
+back in at `refill_rate` per second, and the bucket never holds more than `capacity`.
+Nothing adds tokens on a schedule. The limiter credits `elapsed * refill_rate` tokens on
+the next request and caps the result, so there is no timer and no background job. A user
+costs two numbers, the token count and the second it was last credited.
+
+The two knobs are independent, and none of the window algorithms separate them.
+`capacity` is the largest burst a user can send at once. `refill_rate` is the rate they
+sustain after that burst. Five requests per 10 seconds, with a burst of five, is
+`capacity=5` and `refill_rate=0.5`. Nothing resets, so there is no boundary to stack
+requests around. A user recovers one token every `1 / refill_rate` seconds instead of in
+jumps.
+
+Tokens are fractional on purpose. At a rate below one per second, a call earns less than
+a whole token. Rounding that credit down discards the remainder every time, so a slow
+bucket never fills. The fraction stays in the stored count. Only `count_for` rounds, and
+only for display, so a bucket holding 0.9 tokens reports 0 rather than a token that is
+not there.
+
+The weakness is the burst that `capacity` buys. A user who stayed quiet arrives with a
+full bucket, so `capacity` requests can land at once, whatever the sustained rate says.
+Over any span of `T` seconds the most a user can send is `capacity + refill_rate * T`.
+Size `capacity` for the spike you can absorb, not for the average you want. The limiter
+also evicts nobody, so a user who goes quiet keeps their record until the process ends.
+
 ## Run the demos
 
 ```
 uv run main.py <demo>
 ```
 
-The demos are `fwc`, `swl` and `swc`, plus `fwc-burst`, `swc-burst` and `swc-drift`. Run
-`uv run main.py -h` for the list.
+The demos are `fwc`, `swl`, `swc` and `tb`, plus `fwc-burst`, `swc-burst` and
+`swc-drift`. Run `uv run main.py -h` for the list.
 
 `fwc`, `swl` and `swc` are continuous views. Each sends requests until you stop it and
 prints a bar of the current count. The fixed window bar empties all at once. The sliding
 window bars refill a piece at a time.
+
+`tb` is the same view of a bucket of 5 tokens that refills at 0.5 per second, one request
+every second. The bar runs the other way here, because `count_for` reports the tokens
+left rather than the requests used. The opening requests drain the bucket, and after that
+the bar stays empty and the verdict alternates, which is one token every 2 seconds.
 
 `fwc-burst` and `swc-burst` are the same script against two limiters. Each lines up 1
 second before a window boundary, fires a full allowance, crosses the boundary, then fires
@@ -94,10 +127,11 @@ To add a demo, add one entry to the `DEMOS` dict in `main.py`. A limiter needs
 uv run test_fixed_window_counter.py
 uv run test_sliding_window_log.py
 uv run test_sliding_window_counter.py
+uv run test_token_bucket.py
 ```
 
-A check passes with no output. It fails with an `AssertionError`. The sliding window log
-check sleeps through several windows, so it takes a few seconds.
+A check passes with no output. It fails with an `AssertionError`. Every check sleeps through real
+time, because the limiters work in whole seconds, so each one takes a few seconds.
 
 ## Note on state
 
@@ -109,4 +143,7 @@ to happen as one step, or two workers read the same count and both allow a reque
 limit forbids. The fixed window counter needs a Lua script or a `MULTI` block, because the
 count and the window number are read, reset, and written together. The sliding window
 log maps onto a sorted set per user, where `ZREMRANGEBYSCORE` trims the log and `EXPIRE`
-retires a user who goes quiet.
+retires a user who goes quiet. The token bucket maps onto a hash per user holding the same
+two fields, written by a script for the same reason. An `EXPIRE` of `capacity /
+refill_rate` seconds retires an idle user there for free. A bucket with time to fill is
+worth the same as no record at all.
