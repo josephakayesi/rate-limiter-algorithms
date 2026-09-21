@@ -46,6 +46,34 @@ limit therefore costs `limit` timestamps, where the fixed window counter costs o
 integer. The limiter also evicts nobody, so a user who goes quiet keeps their log until
 the process ends.
 
+## Sliding window counter
+
+Each user gets one record under the key `ratelimit:{api}:{user_id}`, holding a window
+number, the count inside that window, and the count inside the window before it. The
+window number is `int(time.time()) // window_size`, the same one the fixed window counter
+uses. The record rolls forward before each decision. One window on moves `count` into
+`prev_count` and zeroes `count`. A longer gap zeroes both, because the window before this
+one stayed silent.
+
+The decision then reads an estimate rather than a tally. `elapsed` is how far into the
+current window now falls. The estimate is `prev_count` weighted by how much of the
+window is left, plus `count`. A request is allowed while that estimate stays below
+`limit`. The roll sits above the decision, so a denied request rolls the record too.
+
+This buys most of what the sliding window log buys, at the price of the fixed window
+counter. At the start of a new window the previous count still carries at full weight,
+so the fixed window counter's boundary burst is denied here. The weight then falls away
+as the window fills, which returns the allowance a piece at a time. A user costs two
+counts and a window number, where the log costs one timestamp per allowed request.
+
+The weakness is in the word estimate. Spreading `prev_count` evenly across its window is
+an assumption, and real traffic clumps instead. The error is bounded by `prev_count` and
+falls either way, so the verdict can differ from the exact answer by a request. The
+`swc-drift` demo shows that happening against the sliding window log.
+
+`count_for` works the roll out for itself, because only `is_allowed` writes. It returns
+the estimate the decision reads, floored to whole requests.
+
 ## Token bucket
 
 Each user gets a bucket of `capacity` tokens under the key `ratelimit:{api}:{user_id}`. A

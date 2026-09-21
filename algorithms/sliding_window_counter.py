@@ -10,10 +10,10 @@ class SlidingWindowCounterRateLimiter:
     def __init__(self, window_size: int, limit: int):
         self.window_size: int = window_size
         self.limit: int = limit
-        # One log per user: a deque of epoch seconds, oldest first. Rejected
-        # requests are never logged, so the log holds allowed requests only.
-        # Entries are never removed. See the note at the top of the file.
-        self.cache: dict[str, dict[str, int]] = {}  # { window: int, count: int, prev_count: int }
+        # One record per user: {'window': int, 'count': int, 'prev_count': int}.
+        # A new window rolls the record rather than adding to it, so each user
+        # holds exactly one record and there is nothing to expire or sweep.
+        self.cache: dict[str, dict[str, int]] = {}
 
     def is_allowed(self, user_id: str, api: str) -> bool:
         key = f"ratelimit:{api}:{user_id}"
