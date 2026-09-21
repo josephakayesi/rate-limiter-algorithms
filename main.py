@@ -1,7 +1,7 @@
 """Terminal demos for the rate limiters. Run: uv run main.py <demo>
 
 `Limiter` and `WindowedLimiter` below are the whole contract a limiter needs to be
-demo-ready. The token bucket has no windows, so it satisfies `Limiter` alone and gets a
+demo-ready. The buckets have no windows, so they satisfy `Limiter` alone and get a
 `stream` entry and no `burst` one.
 """
 import argparse
@@ -12,6 +12,7 @@ from typing import Protocol, cast
 
 from algorithms import (
     FixedWindowCounterRateLimiter,
+    LeakyBucketRateLimiter,
     SlidingWindowCounterRateLimiter,
     SlidingWindowLogRateLimiter,
     TokenBucketRateLimiter,
@@ -120,6 +121,7 @@ DEMOS = {
     'swl': lambda: stream(SlidingWindowLogRateLimiter(10, 5)),
     'swc': lambda: stream(SlidingWindowCounterRateLimiter(10, 5)),
     'tb': lambda: stream(TokenBucketRateLimiter(5, 0.5), gap=1),
+    'lb': lambda: stream(LeakyBucketRateLimiter(5, 0.5), gap=1),
     'fwc-burst': lambda: burst(FixedWindowCounterRateLimiter(10, 5)),
     'swc-burst': lambda: burst(SlidingWindowCounterRateLimiter(10, 5)),
     'swc-drift': drift,

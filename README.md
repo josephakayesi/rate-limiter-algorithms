@@ -9,7 +9,7 @@ Each one comes with a terminal demo that shows how it behaves and where it break
 - [x] Sliding window log
 - [x] Sliding window counter
 - [x] Token bucket
-- [ ] Leaky bucket
+- [x] Leaky bucket
 
 ## Fixed window counter
 
@@ -74,13 +74,41 @@ Over any span of `T` seconds the most a user can send is `capacity + refill_rate
 Size `capacity` for the spike you can absorb, not for the average you want. The limiter
 also evicts nobody, so a user who goes quiet keeps their record until the process ends.
 
+## Leaky bucket
+
+Each user gets one record under the key `ratelimit:{api}:{user_id}`, holding the level of
+their bucket in requests and the moment that bucket was last leaked. Requests pile up in
+the bucket, and the bucket leaks `leak_rate` requests per second. A request is allowed
+while the level is below `capacity`, and it then raises the level by one.
+
+Nothing leaks on a schedule. The next request works out how much has leaked since
+`last_leak` and takes that off the level. The drain therefore costs nothing between
+requests. Only whole requests leak, because half a request cannot leave the bucket.
+
+That rounding is where the care goes. `last_leak` moves forward by the time the leaked
+requests took to leave, which is `leaked / leak_rate`, and not to `now`. Moving it to
+`now` discards the part of the next request that has already leaked. It does so on every
+request, and the bucket then drains slower than `leak_rate` says. The level is also
+floored at 0, so an empty bucket banks nothing while it waits.
+
+A queue of request timestamps is the usual drawing of this algorithm. The timestamps
+decide nothing though, because only their number is ever read, so two numbers do the
+same work and cost less.
+
+What remains is the token bucket seen from the other side, under the substitution
+`level == capacity - tokens`. The one behaviour left between them is the grain, because
+tokens accrue as fractions and glide, where this leaks whole requests and steps. The
+weakness is the same too. A user who stayed quiet arrives to an empty bucket and can
+fill it at once. The limiter also evicts nobody, so a quiet user keeps their record
+until the process ends.
+
 ## Run the demos
 
 ```
 uv run main.py <demo>
 ```
 
-The demos are `fwc`, `swl`, `swc` and `tb`, plus `fwc-burst`, `swc-burst` and
+The demos are `fwc`, `swl`, `swc`, `tb` and `lb`, plus `fwc-burst`, `swc-burst` and
 `swc-drift`. Run `uv run main.py -h` for the list.
 
 `fwc`, `swl` and `swc` are continuous views. Each sends requests until you stop it and
@@ -91,6 +119,10 @@ window bars refill a piece at a time.
 every second. The bar runs the other way here, because `count_for` reports the tokens
 left rather than the requests used. The opening requests drain the bucket, and after that
 the bar stays empty and the verdict alternates, which is one token every 2 seconds.
+
+`lb` sends one request per second to a bucket of 5 that leaks at 0.5 per second. Arrivals
+beat the leak two to one, so the bar climbs a step every other request. Once the bucket
+is full the verdict alternates, which is the leak rate of one request every 2 seconds.
 
 `fwc-burst` and `swc-burst` are the same script against two limiters. Each lines up 1
 second before a window boundary, fires a full allowance, crosses the boundary, then fires
@@ -128,10 +160,12 @@ uv run test_fixed_window_counter.py
 uv run test_sliding_window_log.py
 uv run test_sliding_window_counter.py
 uv run test_token_bucket.py
+uv run test_leaky_bucket.py
 ```
 
-A check passes with no output. It fails with an `AssertionError`. Every check sleeps through real
-time, because the limiters work in whole seconds, so each one takes a few seconds.
+A check passes with no output. It fails with an `AssertionError`. Every check sleeps
+through real time, because the limiters work in whole seconds, so each one takes a few
+seconds.
 
 ## Note on state
 
@@ -146,4 +180,5 @@ log maps onto a sorted set per user, where `ZREMRANGEBYSCORE` trims the log and 
 retires a user who goes quiet. The token bucket maps onto a hash per user holding the same
 two fields, written by a script for the same reason. An `EXPIRE` of `capacity /
 refill_rate` seconds retires an idle user there for free. A bucket with time to fill is
-worth the same as no record at all.
+worth the same as no record at all. The leaky bucket is the same shape
+as the token bucket, a hash per user under the same script and the same kind of expiry.
