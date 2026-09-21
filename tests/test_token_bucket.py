@@ -1,6 +1,7 @@
-"""Self-check for the token bucket. Run: uv run test_token_bucket.py"""
+"""Self-check for the token bucket. Run: uv run tests/test_token_bucket.py"""
 import time
 
+import context  # noqa: F401  the path shim, so `algorithms` resolves
 from algorithms import TokenBucketRateLimiter
 
 API = '/api/login'

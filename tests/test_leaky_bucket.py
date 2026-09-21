@@ -1,6 +1,7 @@
-"""Self-check for the leaky bucket. Run: uv run test_leaky_bucket.py"""
+"""Self-check for the leaky bucket. Run: uv run tests/test_leaky_bucket.py"""
 import time
 
+import context  # noqa: F401  the path shim, so `algorithms` resolves
 from algorithms import LeakyBucketRateLimiter
 
 API = '/api/login'

@@ -1,6 +1,7 @@
-"""Self-check for the sliding window log. Run: uv run test_sliding_window_log.py"""
+"""Self-check for the sliding window log. Run: uv run tests/test_sliding_window_log.py"""
 import time
 
+import context  # noqa: F401  the path shim, so `algorithms` resolves
 from algorithms import SlidingWindowLogRateLimiter
 
 API = '/api/login'

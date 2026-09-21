@@ -156,16 +156,20 @@ To add a demo, add one entry to the `DEMOS` dict in `main.py`. A limiter needs
 ## Run the checks
 
 ```
-uv run test_fixed_window_counter.py
-uv run test_sliding_window_log.py
-uv run test_sliding_window_counter.py
-uv run test_token_bucket.py
-uv run test_leaky_bucket.py
+uv run tests/test_fixed_window_counter.py
+uv run tests/test_sliding_window_log.py
+uv run tests/test_sliding_window_counter.py
+uv run tests/test_token_bucket.py
+uv run tests/test_leaky_bucket.py
 ```
 
 A check passes with no output. It fails with an `AssertionError`. Every check sleeps
 through real time, because the limiters work in whole seconds, so each one takes a few
 seconds.
+
+Each check imports `tests/context.py` before anything of its own. That module puts the
+project root on the path, because Python gives a script only its own folder, which here
+is `tests`. Without it, `from algorithms import ...` has nowhere to look.
 
 ## Note on state
 
